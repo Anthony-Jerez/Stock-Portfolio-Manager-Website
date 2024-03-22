@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    History
+{% endblock %}
+
+{% block main %}
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th scope="col"> Symbol </th>
+                <th scope="col"> Shares </th>
+                <th scope="col"> Price </th>
+                <th scope="col"> Transacted </th>
+            </tr>
+        </thead>
+        <tbody class="table-group-divider">
+            {% for stock in stocks %}
+                <tr>
+                    <td> {{stock.stock}} </td>
+                    <td> {{stock.shares}} </td>
+                    <td> {{stock.price | usd}} </td>
+                    <td> {{stock.time}} </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}
