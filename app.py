@@ -1,6 +1,5 @@
 import os
-
-from cs50 import SQL
+import sqlite3
 from flask import Flask, flash, redirect, render_template, request, session
 from flask_session import Session
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -19,8 +18,13 @@ app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
-# configure CS50 Library to use SQLite database
-db = SQL("sqlite:///finance.db")
+def get_db_connection():
+    return sqlite3.connect('finance.db')
+
+
+def close_db_connection(conn, cursor):
+    cursor.close()
+    conn.close()
 
 
 @app.after_request
@@ -42,16 +46,21 @@ def modify():
         if not current_password or not new_password:
             return apology("current password or/and new password are empty")
         # retrieve the hash for the current password
-        rows = db.execute("SELECT hash FROM users WHERE id = ?", session["user_id"])
-        hash_password = rows[0]["hash"]
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT hash FROM users WHERE id = ?", (session["user_id"],))
+        hash_password = cursor.fetchone()[0]
         # ensure current password provided is actually correct based on record
         if not check_password_hash(hash_password, current_password):
+            close_db_connection(conn, cursor)
             return apology("input for current password is wrong")
         new_hash = generate_password_hash(new_password, method="pbkdf2", salt_length=16)
         # update record with new password's hash
-        db.execute(
-            "UPDATE users SET hash = ? WHERE id = ?", new_hash, session["user_id"]
+        cursor.execute(
+            "UPDATE users SET hash = ? WHERE id = ?", (new_hash, session["user_id"])
         )
+        conn.commit()
+        close_db_connection(conn, cursor)
         # redirect to login page
         return redirect("/login")
     else:
@@ -63,20 +72,23 @@ def modify():
 @login_required
 def index():
     """Show portfolio of stocks"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
     # retrieve record of user's owned stocks and shares
-    stocks = db.execute(
+    cursor.execute(
         "SELECT stock, SUM(shares) AS sum FROM stock_record GROUP BY stock HAVING id = ?",
-        session["user_id"],
+        (session["user_id"],)
     )
+    stocks = cursor.fetchall()
     stocks_list = []
     grand_total = 0
     # for each owned stock in record
     for curr_stock in stocks:
-        shares_owned = curr_stock["sum"]
+        shares_owned = curr_stock[1]
         # if current stock examined is no longer owned, move to examine next stock
         if shares_owned < 1:
             continue
-        symbol = curr_stock["stock"]
+        symbol = curr_stock[0]
         stock_quote = lookup(symbol)
         total_price = stock_quote["price"] * shares_owned
         curr_stock_dict = {
@@ -88,9 +100,10 @@ def index():
         stocks_list.append(curr_stock_dict)
         grand_total += total_price
     # retrieve user's cash balance
-    rows = db.execute("SELECT cash FROM users WHERE id = ? LIMIT 1", session["user_id"])
-    cash_balance = rows[0]["cash"]
+    cursor.execute("SELECT cash FROM users WHERE id = ? LIMIT 1", (session["user_id"],))
+    cash_balance = cursor.fetchone()[0]
     grand_total += cash_balance
+    close_db_connection(conn, cursor)
     # render homepage based on stocks currently owned
     return render_template(
         "index.html",
@@ -120,29 +133,34 @@ def buy():
             return apology("invalid symbol provided")
         total_stock_price = stock_quote["price"] * shares
         # retrieve record of user's current cash balance
-        rows = db.execute(
-            "SELECT cash FROM users WHERE id = ? LIMIT 1", session["user_id"]
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT cash FROM users WHERE id = ? LIMIT 1", (session["user_id"],)
         )
-        available_cash = rows[0]["cash"]
+        available_cash = cursor.fetchone()[0]
         # ensure user has sufficient cash to afford purchase
         if available_cash < total_stock_price:
+            close_db_connection(conn, cursor)
             return apology("user has insufficent cash available for purchase")
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # update record with user's purchase
-        db.execute(
+        cursor.execute(
             "INSERT INTO stock_record (id, stock, shares, price, total_price, time) VALUES (?, ?, ?, ?, ?, ?)",
-            session["user_id"],
+            (session["user_id"],
             stock_quote["symbol"],
             shares,
             stock_quote["price"],
             total_stock_price,
-            current_time,
+            current_time)
         )
         available_cash -= total_stock_price
         # update user's cash balance
-        db.execute(
-            "UPDATE users SET cash = ? WHERE id = ?", available_cash, session["user_id"]
+        cursor.execute(
+            "UPDATE users SET cash = ? WHERE id = ?", (available_cash, session["user_id"])
         )
+        conn.commit()
+        close_db_connection(conn, cursor)
         # redirect to homepage
         return redirect("/")
     else:
@@ -154,10 +172,14 @@ def buy():
 @login_required
 def history():
     """Show history of transactions"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
     # retrieve record of user's owned stocks
-    stocks = db.execute("SELECT * FROM stock_record WHERE id = ?", session["user_id"])
+    cursor.execute("SELECT * FROM stock_record WHERE id = ?", (session["user_id"],))
+    stocks = cursor.fetchall()
     # reverse the list of owned stocks to ensure the latest history is displayed at the top of table
     stocks.reverse()
+    close_db_connection(conn, cursor)
     # render history page
     return render_template("history.html", stocks=stocks)
 
@@ -178,21 +200,24 @@ def login():
         # Ensure password was submitted
         if not request.form.get("password"):
             return apology("must provide password", 403)
-
+    
         # Query database for username
-        rows = db.execute(
-            "SELECT * FROM users WHERE username = ?", request.form.get("username")
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM users WHERE username = ?", (request.form.get("username"),)
         )
-
+        rows = cursor.fetchall()
         # Ensure username exists and password is correct
         if len(rows) != 1 or not check_password_hash(
-            rows[0]["hash"], request.form.get("password")
+            rows[0][2], request.form.get("password")
         ):
+            close_db_connection(conn, cursor)
             return apology("invalid username and/or password", 403)
-
+        
         # Remember which user has logged in
-        session["user_id"] = rows[0]["id"]
-
+        session["user_id"] = rows[0][0]
+        close_db_connection(conn, cursor)
         # Redirect user to home page
         return redirect("/")
 
@@ -224,10 +249,10 @@ def quote():
         stock_quote = lookup(symbol)
         # ensure symbol provided is valid
         if not stock_quote:
-            return apology("invalid symbol provided")
+            return apology(f"invalid symbol provided {symbol}")
         # render template for quoted page
         return render_template(
-            "quoted.html", symbol=stock_quote["name"], value=stock_quote["price"]
+            "quoted.html", symbol=stock_quote["symbol"], value=stock_quote["price"]
         )
     else:
         # render template for quote page
@@ -242,25 +267,33 @@ def register():
         # ensure username is provided
         if not username:
             return apology("must provide username")
-        rows = db.execute("SELECT * FROM users WHERE username = ?", username)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+        rows = cursor.fetchall()
         # ensure username isn't already being used according to record
         if len(rows) != 0:
+            close_db_connection(conn, cursor)
             return apology("username is already taken")
         password = request.form.get("password")
         confirmation_password = request.form.get("confirmation")
         # ensure password and confirmation password aren't both empty
         if not password and not confirmation_password:
+            close_db_connection(conn, cursor)
             return apology("password and confirmation password is empty")
         # ensure password and confirmation password match
         if password != confirmation_password:
+            close_db_connection(conn, cursor)
             return apology("password and confirmation password don't match")
         password_hash = generate_password_hash(
             password, method="pbkdf2", salt_length=16
         )
         # add new user's login information to record
-        db.execute(
-            "INSERT INTO users (username, hash) VALUES (?, ?)", username, password_hash
+        cursor.execute(
+            "INSERT INTO users (username, hash) VALUES (?, ?)", (username, password_hash)
         )
+        conn.commit()
+        close_db_connection(conn, cursor)
         # redirect to homepage
         return redirect("/")
     else:
@@ -284,56 +317,67 @@ def sell():
             return apology("shares is not a positive integer")
         shares = int(shares)
         # retrieve user's owned stocks and shares
-        rows = db.execute(
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
             "SELECT stock, SUM(shares) AS sum FROM stock_record GROUP BY stock HAVING id = ? AND stock = ?",
-            session["user_id"],
-            symbol,
+            (session["user_id"],
+            symbol)
         )
+        rows = cursor.fetchall()
         # ensure data retrieved is not empty
         if len(rows) == 0:
+            close_db_connection(conn, cursor)
             return apology("no shares of this stock are owned")
-        owned_shares = rows[0]["sum"]
+        owned_shares = rows[0][1]
         # ensure user owns at least the number of shares inputted
         if owned_shares < shares:
+            close_db_connection(conn, cursor)
             return apology("less shares are owned")
         stock_quote = lookup(symbol)
         sold_price = stock_quote["price"] * shares
         # update record based on shares sold
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         shares *= -1
-        db.execute(
+        cursor.execute(
             "INSERT INTO stock_record (id, stock, shares, price, total_price, time) VALUES (?, ?, ?, ?, ?, ?)",
-            session["user_id"],
+            (session["user_id"],
             stock_quote["symbol"],
             shares,
             stock_quote["price"],
             sold_price,
-            current_time,
+            current_time)
         )
         # update cash balance
-        rows = db.execute(
-            "SELECT cash FROM users WHERE id = ? LIMIT 1", session["user_id"]
+        cursor.execute(
+            "SELECT cash FROM users WHERE id = ? LIMIT 1", (session["user_id"],)
         )
-        cash_balance = rows[0]["cash"]
+        cash_balance = cursor.fetchone()[0]
         cash_balance += sold_price
-        db.execute(
-            "UPDATE users SET cash = ? WHERE id = ?", cash_balance, session["user_id"]
+        cursor.execute(
+            "UPDATE users SET cash = ? WHERE id = ?", (cash_balance, session["user_id"])
         )
+        conn.commit()
+        close_db_connection(conn, cursor)
         # redirect to homepage
         return redirect("/")
     else:
         # retrieve record of user's owned stocks and shares
-        stocks = db.execute(
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
             "SELECT stock, SUM(shares) AS sum FROM stock_record GROUP BY stock HAVING id = ?",
-            session["user_id"],
+            (session["user_id"],)
         )
+        stocks = cursor.fetchall()
+        close_db_connection(conn, cursor)
         symbols = []
         # for each owned stock in record
         for curr_stock in stocks:
             # if current stock examined is no longer owned, move to examine next stock
-            if curr_stock["sum"] < 1:
+            if curr_stock[1] < 1:
                 continue
             # add symbol of currently owned stock to list
-            symbols.append(curr_stock["stock"])
+            symbols.append(curr_stock[0])
         # render template for sell page with the symbols of stocks currently owned
         return render_template("sell.html", symbols=symbols)
