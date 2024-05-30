@@ -76,7 +76,7 @@ def index():
     cursor = conn.cursor()
     # retrieve record of user's owned stocks and shares
     cursor.execute(
-        "SELECT stock, SUM(shares) AS sum FROM stock_record GROUP BY stock HAVING id = ?",
+        "SELECT stock, SUM(shares) AS sum FROM stock_record WHERE user_id = ? GROUP BY stock",
         (session["user_id"],)
     )
     stocks = cursor.fetchall()
@@ -146,7 +146,7 @@ def buy():
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # update record with user's purchase
         cursor.execute(
-            "INSERT INTO stock_record (id, stock, shares, price, total_price, time) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO stock_record (user_id, stock, shares, price, total_price, time) VALUES (?, ?, ?, ?, ?, ?)",
             (session["user_id"],
             stock_quote["symbol"],
             shares,
@@ -175,7 +175,7 @@ def history():
     conn = get_db_connection()
     cursor = conn.cursor()
     # retrieve record of user's owned stocks
-    cursor.execute("SELECT * FROM stock_record WHERE id = ?", (session["user_id"],))
+    cursor.execute("SELECT * FROM stock_record WHERE user_id = ?", (session["user_id"],))
     stocks = cursor.fetchall()
     # reverse the list of owned stocks to ensure the latest history is displayed at the top of table
     stocks.reverse()
@@ -320,7 +320,7 @@ def sell():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT stock, SUM(shares) AS sum FROM stock_record GROUP BY stock HAVING id = ? AND stock = ?",
+            "SELECT stock, SUM(shares) AS sum FROM stock_record WHERE user_id = ? AND stock = ? GROUP BY stock",
             (session["user_id"],
             symbol)
         )
@@ -329,8 +329,8 @@ def sell():
         if len(rows) == 0:
             close_db_connection(conn, cursor)
             return apology("no shares of this stock are owned")
-        owned_shares = rows[0][1]
         # ensure user owns at least the number of shares inputted
+        owned_shares = rows[0][1]
         if owned_shares < shares:
             close_db_connection(conn, cursor)
             return apology("less shares are owned")
@@ -340,7 +340,7 @@ def sell():
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         shares *= -1
         cursor.execute(
-            "INSERT INTO stock_record (id, stock, shares, price, total_price, time) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO stock_record (user_id, stock, shares, price, total_price, time) VALUES (?, ?, ?, ?, ?, ?)",
             (session["user_id"],
             stock_quote["symbol"],
             shares,
@@ -366,7 +366,7 @@ def sell():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT stock, SUM(shares) AS sum FROM stock_record GROUP BY stock HAVING id = ?",
+            "SELECT stock, SUM(shares) AS sum FROM stock_record WHERE user_id = ? GROUP BY stock",
             (session["user_id"],)
         )
         stocks = cursor.fetchall()
