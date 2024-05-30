@@ -48,5 +48,5 @@ CREATE TABLE stock_record (
 
 ### Video Walkthrough:
 
-Check out the [video walkthrough](URL_HERE) of the project to see it functioning in action!
+Check out this [video walkthrough](URL_HERE) to see it functioning in action!
 
