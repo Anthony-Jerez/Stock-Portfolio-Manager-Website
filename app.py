@@ -174,11 +174,9 @@ def history():
     """Show history of transactions"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    # retrieve record of user's owned stocks
-    cursor.execute("SELECT * FROM stock_record WHERE user_id = ?", (session["user_id"],))
+    # retrieve record of user's owned stocks where latest history is displayed at the top of table
+    cursor.execute("SELECT * FROM stock_record WHERE id = ? ORDER BY time DESC", (session["user_id"],))
     stocks = cursor.fetchall()
-    # reverse the list of owned stocks to ensure the latest history is displayed at the top of table
-    stocks.reverse()
     close_db_connection(conn, cursor)
     # render history page
     return render_template("history.html", stocks=stocks)
