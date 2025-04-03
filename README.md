@@ -25,6 +25,12 @@ Stock Savvy is a fully functional website that allows users to manage their indi
 #### Upcoming Features:
 + Users will have a more personalized experience.
 
+### Video Walkthrough:
+
+Check out this [video walkthrough](https://youtu.be/5LNKwCcenC8) to see it functioning in action!
+
+[![Video Thumbnail](https://img.youtube.com/vi/5LNKwCcenC8/hqdefault.jpg)](https://www.youtube.com/watch?v=5LNKwCcenC8)
+
 #### SQLite Schema
 ```sql
 CREATE TABLE users (
@@ -45,8 +51,4 @@ CREATE TABLE stock_record (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 ```
-
-### Video Walkthrough:
-
-Check out this [video walkthrough](https://youtu.be/5LNKwCcenC8) to see it functioning in action!
 
