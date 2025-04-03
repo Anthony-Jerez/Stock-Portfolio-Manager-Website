@@ -27,7 +27,7 @@ Stock Savvy is a fully functional website that allows users to manage their indi
 
 ### Video Walkthrough:
 
-Check out this [video walkthrough](https://youtu.be/5LNKwCcenC8) to see it functioning in action!
+Check out the following video to see it functioning in action!
 
 [![Video Thumbnail](https://img.youtube.com/vi/5LNKwCcenC8/hqdefault.jpg)](https://www.youtube.com/watch?v=5LNKwCcenC8)
 
